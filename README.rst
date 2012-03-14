@@ -18,7 +18,7 @@ Requirements
   - Cython (http://cython.org)
   - meliae (https://launchpad.net/meliae)
     - easy_install/pip may not work for this install. If not, use the tarball
-      from the distribution website
+    from the distribution website
 
 .. image:: http://lewk.org/img/pyrasite/pyrasite-info.png
 
