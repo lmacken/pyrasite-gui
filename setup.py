@@ -7,12 +7,18 @@ long_description = f.read().split('split here')[1]
 f.close()
 
 try:
+    from gi.repository import GLib, GObject, Pango, Gtk, WebKit
+except ImportError:
+    print "Unable to find pygobject3. Please install the 'pygobject3' "
+    print "package on Fedora, or 'python-gobject-dev on Ubuntu."
+    sys.exit(1)
+try:
     from meliae import version_info
 except ImportError:
     print "We require meliae to be installed."
     exit(1)
 
-setup(name='pyrasite',
+setup(name='pyrasite-gui',
       version=version,
       description="Inject code into a running Python process",
       long_description=long_description,
