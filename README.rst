@@ -6,9 +6,16 @@ pyrasite-gui
 A graphical interface that lets you easily analyze and introspect unaltered
 running Python processes.
 
+.. image:: http://lewk.org/img/pyrasite/pyrasite-info.png
+
+.. image:: http://lewk.org/img/pyrasite/pyrasite-stacks.png
+
+.. image:: http://lewk.org/img/pyrasite/pyrasite-objects.png
+
+.. image:: http://lewk.org/img/pyrasite/pyrasite-callgraph.png
+
 Requirements
 ~~~~~~~~~~~~
-
 
   - Pyrasite (https://github.com/lmacken/pyrasite)
   - PyGObject3 Introspection bindings
@@ -27,14 +34,6 @@ Requirements
   - meliae (https://launchpad.net/meliae)
     - easy_install/pip may not work for this install. If not, use the tarball
     from the distribution website
-
-.. image:: http://lewk.org/img/pyrasite/pyrasite-info.png
-
-.. image:: http://lewk.org/img/pyrasite/pyrasite-stacks.png
-
-.. image:: http://lewk.org/img/pyrasite/pyrasite-objects.png
-
-.. image:: http://lewk.org/img/pyrasite/pyrasite-callgraph.png
 
 Mailing List
 ~~~~~~~~~~~~
