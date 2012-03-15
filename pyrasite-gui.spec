@@ -30,10 +30,9 @@ and introspect a running Python process.
 %setup -q -n %{name}-%{version}%{betaver}
 
 %build
-%{__python} setup.py build
 
 %install
-%{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
+cp pyrasite-gui.py %{buildroot}%{_bindir}
 
 %files
 %defattr(-,root,root,-)
