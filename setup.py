@@ -19,11 +19,9 @@ setup(name='pyrasite-gui',
       include_package_data=True,
       zip_safe=False,
       install_requires=[
-        "Cython", # Needed for meliae
         "meliae",
         "pycallgraph",
         "psutil",
-        "Sphinx",
       ],
       tests_require=['nose'],
       test_suite='nose.collector',
