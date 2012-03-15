@@ -25,10 +25,7 @@ setup(name='pyrasite-gui',
       ],
       tests_require=['nose'],
       test_suite='nose.collector',
-      entry_points="""
-          [console_scripts]
-          pyrasite-gui = pyrasite.tools.gui:main
-      """,
+      entry_points="",
       classifiers=[
           'Development Status :: 4 - Beta',
           'Environment :: Console',
