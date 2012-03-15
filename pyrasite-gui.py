@@ -974,7 +974,19 @@ class ResourceUsagePoller(threading.Thread):
                 self.process = None
                 process_status = '[Terminated]'
 
+def check_depends():
+    import subprocess
+
+    try:
+        # call dot command with null input file - throws exception if command "dot" not found
+        ret = subprocess.call(['dot', '/dev/null'], shell=False)
+    except OSError:
+        print('WARNING: graphviz dot command not found.  Call graph will not be available')
+
+
 def main():
+    check_depends()
+
     GObject.threads_init()
     mainloop = GLib.MainLoop()
 
