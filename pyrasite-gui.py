@@ -446,7 +446,6 @@ class PyrasiteWindow(Gtk.Window):
 
         if not self.resource_thread:
             self.resource_thread = ResourceUsagePoller(proc.pid)
-            #self.resource_thread.process = p
             self.resource_thread.daemon = True
             self.resource_thread.info_view = self.info_view
             self.resource_thread.start()
