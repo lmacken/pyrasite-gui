@@ -58,6 +58,8 @@ write_intervals = []
 read_intervals = []
 read_count = read_bytes = write_count = write_bytes = 0
 
+process_title = ''
+process_status = ''
 thread_intervals = {}
 thread_colors = {}
 thread_totals = {}
@@ -355,7 +357,7 @@ class PyrasiteWindow(Gtk.Window):
             </style>
         </head>
         <body>
-            <h2>%(title)s</h2>
+            <h2 id="proc_title">%(title)s</h2>
                 <div class="grid">
                 <table>
                     <thead><tr>
@@ -400,6 +402,10 @@ class PyrasiteWindow(Gtk.Window):
             </div>
             <br/>
         """ % dict(title=proc.title)
+
+        global process_title, process_status
+        process_title = proc.title
+        process_status = ""
 
         self.info_html += """
         <div class="grid">
@@ -472,6 +478,7 @@ class PyrasiteWindow(Gtk.Window):
         global cpu_intervals, mem_intervals, cpu_details, mem_details
         global read_intervals, write_intervals, read_bytes, write_bytes
         global open_files, open_connections
+        global process_title, process_status
         script = """
             jQuery('#cpu_graph').sparkline(%s, {'height': 75, 'width': 250,
                 spotRadius: 3, fillColor: '#73d216', lineColor: '#4e9a06'});
@@ -520,6 +527,9 @@ class PyrasiteWindow(Gtk.Window):
                                   conn['remote'], conn['status'])
                            for i, conn in enumerate(open_connections)])
 
+        script += """
+            jQuery('#proc_title').text('%s %s');
+        """ % (str(process_title).strip(), process_status)
         self.info_view.execute_script(script)
         return True
 
@@ -878,82 +888,91 @@ class ResourceUsagePoller(threading.Thread):
         global read_count, read_bytes, write_count, write_bytes
         global read_intervals, write_intervals, thread_intervals
         global open_files, open_connections
+        global process_status
         while True:
-            if self.process:
-                if len(cpu_intervals) >= INTERVALS:
-                    cpu_intervals = cpu_intervals[1:INTERVALS]
-                    mem_intervals = mem_intervals[1:INTERVALS]
-                    read_intervals = read_intervals[1:INTERVALS]
-                    write_intervals = write_intervals[1:INTERVALS]
+            try:
+                if self.process:
+                    if len(cpu_intervals) >= INTERVALS:
+                        cpu_intervals = cpu_intervals[1:INTERVALS]
+                        mem_intervals = mem_intervals[1:INTERVALS]
+                        read_intervals = read_intervals[1:INTERVALS]
+                        write_intervals = write_intervals[1:INTERVALS]
 
-                cpu_intervals.append(
-                    self.process.get_cpu_percent(interval=POLL_INTERVAL))
-                mem_intervals.append(self.process.get_memory_info().rss)
-                cputimes = self.process.get_cpu_times()
-                cpu_details = '%0.2f%% (%s user, %s system)' % (
-                        cpu_intervals[-1], cputimes.user, cputimes.system)
-                meminfo = self.process.get_memory_info()
-                mem_details = '%0.2f%% (%s RSS, %s VMS)' % (
-                        self.process.get_memory_percent(),
-                        humanize_bytes(meminfo.rss),
-                        humanize_bytes(cputimes.system))
+                    cpu_intervals.append(
+                        self.process.get_cpu_percent(interval=POLL_INTERVAL))
+                    mem_intervals.append(self.process.get_memory_info().rss)
+                    cputimes = self.process.get_cpu_times()
+                    cpu_details = '%0.2f%% (%s user, %s system)' % (
+                            cpu_intervals[-1], cputimes.user, cputimes.system)
+                    meminfo = self.process.get_memory_info()
+                    mem_details = '%0.2f%% (%s RSS, %s VMS)' % (
+                            self.process.get_memory_percent(),
+                            humanize_bytes(meminfo.rss),
+                            humanize_bytes(cputimes.system))
 
-                io = self.process.get_io_counters()
-                read_since_last = io.read_bytes - read_bytes
-                read_intervals.append(read_since_last)
-                read_count = io.read_count
-                read_bytes = io.read_bytes
-                write_since_last = io.write_bytes - write_bytes
-                write_intervals.append(write_since_last)
-                write_count = io.write_count
-                write_bytes = io.write_bytes
+                    io = self.process.get_io_counters()
+                    read_since_last = io.read_bytes - read_bytes
+                    read_intervals.append(read_since_last)
+                    read_count = io.read_count
+                    read_bytes = io.read_bytes
+                    write_since_last = io.write_bytes - write_bytes
+                    write_intervals.append(write_since_last)
+                    write_count = io.write_count
+                    write_bytes = io.write_bytes
 
-                for thread in self.process.get_threads():
-                    if thread.id not in thread_intervals:
-                        thread_intervals[thread.id] = []
-                        thread_colors[thread.id] = get_color()
-                        thread_totals[thread.id] = 0.0
+                    for thread in self.process.get_threads():
+                        if thread.id not in thread_intervals:
+                            thread_intervals[thread.id] = []
+                            thread_colors[thread.id] = get_color()
+                            thread_totals[thread.id] = 0.0
 
-                    if len(thread_intervals[thread.id]) >= INTERVALS:
-                        thread_intervals[thread.id] = \
-                                thread_intervals[thread.id][1:INTERVALS]
+                        if len(thread_intervals[thread.id]) >= INTERVALS:
+                            thread_intervals[thread.id] = \
+                                    thread_intervals[thread.id][1:INTERVALS]
 
-                    # FIXME: we should figure out some way to visually
-                    # distinguish between user and system time.
-                    total = thread.system_time + thread.user_time
-                    amount_since = total - thread_totals[thread.id]
-                    thread_intervals[thread.id].append(
-                            float('%.2f' % amount_since))
-                    thread_totals[thread.id] = total
+                        # FIXME: we should figure out some way to visually
+                        # distinguish between user and system time.
+                        total = thread.system_time + thread.user_time
+                        amount_since = total - thread_totals[thread.id]
+                        thread_intervals[thread.id].append(
+                                float('%.2f' % amount_since))
+                        thread_totals[thread.id] = total
 
-            # Open connections
-            connections = []
-            for i, conn in enumerate(self.process.get_connections()):
-                if conn.type == socket.SOCK_STREAM:
-                    type = 'TCP'
-                elif conn.type == socket.SOCK_DGRAM:
-                    type = 'UDP'
+                    # Open connections
+                    connections = []
+                    for i, conn in enumerate(self.process.get_connections()):
+                        if conn.type == socket.SOCK_STREAM:
+                            type = 'TCP'
+                        elif conn.type == socket.SOCK_DGRAM:
+                            type = 'UDP'
+                        else:
+                            type = 'UNIX'
+                        lip, lport = conn.local_address
+                        if not conn.remote_address:
+                            rip = rport = '*'
+                        else:
+                            rip, rport = conn.remote_address
+                        connections.append({
+                            'type': type,
+                            'status': conn.status,
+                            'local': '%s:%s' % (lip, lport),
+                            'remote': '%s:%s' % (rip, rport),
+                            })
+                    open_connections = connections
+
+                    # Open files
+                    files = []
+                    for open_file in self.process.get_open_files():
+                        files.append(open_file.path)
+                    open_files = files
+
                 else:
-                    type = 'UNIX'
-                lip, lport = conn.local_address
-                if not conn.remote_address:
-                    rip = rport = '*'
-                else:
-                    rip, rport = conn.remote_address
-                connections.append({
-                    'type': type,
-                    'status': conn.status,
-                    'local': '%s:%s' % (lip, lport),
-                    'remote': '%s:%s' % (rip, rport),
-                    })
-            open_connections = connections
+                    time.sleep(1)
 
-            # Open files
-            files = []
-            for open_file in self.process.get_open_files():
-                files.append(open_file.path)
-            open_files = files
-
+            except psutil.NoSuchProcess:
+                log.warn("Lost Process")
+                self.process = None
+                process_status = '[Terminated]'
 
 def main():
     GObject.threads_init()
