@@ -17,7 +17,7 @@ running Python processes.
 Requirements
 ~~~~~~~~~~~~
 
-  - Pyrasite (https://github.com/lmacken/pyrasite)
+  - `Pyrasite <https://github.com/lmacken/pyrasite>`_
   - PyGObject3 Introspection bindings
 
     - Fedora: pygobject3
@@ -30,10 +30,8 @@ Requirements
     - Ubuntu: gir1.2-webkit-3.0
     - Arch: libwebkit3
 
-  - Cython (http://cython.org)
-  - meliae (https://launchpad.net/meliae)
-    - easy_install/pip may not work for this install. If not, use the tarball
-    from the distribution website
+  - `meliae <https://launchpad.net/meliae>`_
+    - easy_install/pip may not work for this install. If not, use the tarball from the distribution website. You may need to install `Cython <http://cython.org>`_ in order to get meliae to build.
 
 Mailing List
 ~~~~~~~~~~~~
