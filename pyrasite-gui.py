@@ -287,6 +287,17 @@ class PyrasiteWindow(Gtk.Window):
         self.show_all()
         self.progress.hide()
 
+        # Load up our javascript resources
+        js = join(dirname(abspath(__file__)), 'js')
+        if not os.path.isdir(js):
+            js = '/usr/lib/javascript/'
+        jquery_js = open(join(js, 'jquery-1.7.1.min.js'))
+        self.jquery_js = jquery_js.read()
+        jquery_js.close()
+        jquery_sparkline_js = open(join(js, 'jquery.sparkline.min.js'))
+        self.jquery_sparkline_js = jquery_sparkline_js.read()
+        jquery_sparkline_js.close()
+
     def switch_page(self, notebook, page, pagenum):
         name = self.notebook.get_tab_label(self.notebook.get_nth_page(pagenum))
         if name.get_text() == 'Shell':
@@ -463,13 +474,8 @@ class PyrasiteWindow(Gtk.Window):
 
     def inject_js(self):
         log.debug("Injecting jQuery")
-        js = join(dirname(abspath(__file__)), 'js')
-        jquery = open(join(js, 'jquery-1.7.1.min.js'))
-        self.info_view.execute_script(jquery.read())
-        jquery.close()
-        sparkline = open(join(js, 'jquery.sparkline.min.js'))
-        self.info_view.execute_script(sparkline.read())
-        sparkline.close()
+        self.info_view.execute_script(self.jquery_js)
+        self.info_view.execute_script(self.jquery_sparkline_js)
 
     def render_resource_usage(self):
         """
