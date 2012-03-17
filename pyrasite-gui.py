@@ -307,7 +307,6 @@ class PyrasiteWindow(Gtk.Window):
         self.progress.hide()
 
     def sample_call_tree(self, widget):
-        print("sample_call_tree: sample duration %d" % self.spinner.get_value())
         self.generate_callgraph(sample_size=self.spinner.get_value())
 
     def switch_page(self, notebook, page, pagenum):
@@ -622,7 +621,7 @@ class PyrasiteWindow(Gtk.Window):
         self.dump_stacks()
 
         ## Call Stack
-        self.generate_callgraph()
+        self.generate_callgraph(1, True)
 
         self.fontify()
         self.update_progress(1.0)
@@ -691,12 +690,20 @@ class PyrasiteWindow(Gtk.Window):
         end = start.copy()
         self.source_buffer.insert(end, code)
 
-    def generate_callgraph(self, sample_size=1):
-        self.update_progress(0.7, "Tracing call stack for %d seconds" % sample_size)
+    def generate_callgraph(self, sample_size=1, show_progress=False):
+        if show_progress:
+            self.update_progress(0.7, "Tracing call stack for %d seconds" % sample_size)
+
         self.proc.cmd('import pycallgraph; pycallgraph.start_trace()')
-        self.update_progress(0.8)
+
+        if show_progress:
+            self.update_progress(0.8)
+
         time.sleep(sample_size)
-        self.update_progress(0.9, "Generating call stack graph")
+
+        if show_progress:
+            self.update_progress(0.9, "Generating call stack graph")
+
         image = '/tmp/%d-callgraph.png' % self.proc.pid
         self.proc.cmd('import pycallgraph; pycallgraph.make_dot_graph("%s")' %
                  image)
