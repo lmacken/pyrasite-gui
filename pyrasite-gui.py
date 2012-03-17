@@ -260,15 +260,34 @@ class PyrasiteWindow(Gtk.Window):
         notebook.connect('switch-page', self.switch_page)
         self.notebook = notebook
 
-        self.call_graph = Gtk.Image()
+        graph_vbox = Gtk.VBox()
+        graph_spinner_box = Gtk.HBox(False, 0)
+        graph_vbox.pack_start(graph_spinner_box, False, False, 0)
+
+        label = Gtk.Label("Sample size(seconds): ")
+        label.set_alignment(0, 0.5)
+        graph_spinner_box.pack_start(label, False, False, 0)
+
+        adj = Gtk.Adjustment(1.0, 1.0, 60.0, 1.0, 5.0, 0.0)
+        self.spinner = spinner = Gtk.SpinButton()
+        spinner.configure(adj,0,0)
+        spinner.set_wrap(False)
+        graph_spinner_box.pack_start(spinner, False, False, 0)
+
+        self.spinner_button = spinner_button = Gtk.Button('Go')
+        spinner_button.connect('clicked', self.sample_call_tree)
+        graph_spinner_box.pack_start(spinner_button, False, False, 0)
+
         scrolled_window = Gtk.ScrolledWindow(hadjustment=None,
                                              vadjustment=None)
         scrolled_window.set_policy(Gtk.PolicyType.ALWAYS,
                                    Gtk.PolicyType.ALWAYS)
 
+        self.call_graph = Gtk.Image()
         scrolled_window.add_with_viewport(self.call_graph)
 
-        notebook.append_page(scrolled_window,
+        graph_vbox.pack_start(scrolled_window, True, True, 0)
+        notebook.append_page(graph_vbox,
                 Gtk.Label.new_with_mnemonic('_Call Graph'))
 
         self.details_html = ''
@@ -297,6 +316,9 @@ class PyrasiteWindow(Gtk.Window):
         jquery_sparkline_js = open(join(js, 'jquery.sparkline.min.js'))
         self.jquery_sparkline_js = jquery_sparkline_js.read()
         jquery_sparkline_js.close()
+
+    def sample_call_tree(self, widget):
+        self.generate_callgraph(sample_size=self.spinner.get_value())
 
     def switch_page(self, notebook, page, pagenum):
         name = self.notebook.get_tab_label(self.notebook.get_nth_page(pagenum))
@@ -332,8 +354,8 @@ class PyrasiteWindow(Gtk.Window):
     def obj_row_activated_cb(self, *args, **kw):
         log.debug("obj_row_activated_cb(%s, %s)" % (args, kw))
 
-    def generate_description(self, proc, title):
-        p = psutil.Process(proc.pid)
+    def generate_description(self, title):
+        p = psutil.Process(self.proc.pid)
 
         self.info_html = """
         <html><head>
@@ -412,10 +434,10 @@ class PyrasiteWindow(Gtk.Window):
                 </table>
             </div>
             <br/>
-        """ % dict(title=proc.title)
+        """ % dict(title=self.proc.title)
 
         global process_title, process_status
-        process_title = proc.title
+        process_title = self.proc.title
         process_status = ""
 
         self.info_html += """
@@ -454,7 +476,7 @@ class PyrasiteWindow(Gtk.Window):
             <li><b>gid:</b> %s</li>
             <li><b>nice:</b> %s</li>
         </ul>
-        """ % (proc.title, p.status, p.getcwd(), ' '.join(p.cmdline),
+        """ % (self.proc.title, p.status, p.getcwd(), ' '.join(p.cmdline),
                getattr(p, 'terminal', 'unknown'), time.ctime(p.create_time),
                p.username, p.uids.real, p.gids.real, p.nice)
 
@@ -462,7 +484,7 @@ class PyrasiteWindow(Gtk.Window):
                                       "utf-8", '#')
 
         if not self.resource_thread:
-            self.resource_thread = ResourceUsagePoller(proc.pid)
+            self.resource_thread = ResourceUsagePoller(self.proc.pid)
             self.resource_thread.daemon = True
             self.resource_thread.info_view = self.info_view
             self.resource_thread.start()
@@ -584,7 +606,7 @@ class PyrasiteWindow(Gtk.Window):
         self.pid = proc.pid
 
         # Analyze the process
-        self.generate_description(proc, title)
+        self.generate_description(title)
 
         # Inject a reverse subshell
         self.update_progress(0.2, "Injecting reverse connection")
@@ -594,7 +616,7 @@ class PyrasiteWindow(Gtk.Window):
 
         # Dump objects and load them into our store
         self.update_progress(0.3, "Dumping all objects")
-        self.dump_objects(proc)
+        self.dump_objects()
 
         # Shell
         self.update_progress(0.5, "Determining Python version")
@@ -602,25 +624,25 @@ class PyrasiteWindow(Gtk.Window):
                 proc.cmd('import sys; print("Python " + sys.version)'))
 
         # Dump stacks
-        self.dump_stacks(proc)
+        self.dump_stacks()
 
         ## Call Stack
-        self.generate_callgraph(proc)
+        self.generate_callgraph(1, True)
 
         self.fontify()
         self.update_progress(1.0)
         self.progress.hide()
         self.update_progress(0.0)
 
-    def dump_objects(self, proc):
+    def dump_objects(self):
         cmd = ';'.join(["import os, shutil", "from meliae import scanner",
                         "tmp = '/tmp/%d' % os.getpid()",
                         "scanner.dump_all_objects(tmp + '.json')",
                         "shutil.move(tmp + '.json', tmp + '.objects')"])
-        output = proc.cmd(cmd)
+        output = self.proc.cmd(cmd)
         if 'No module named meliae' in output:
             log.error('Error: %s is unable to import `meliae`' %
-                      proc.title.strip())
+                      self.proc.title.strip())
             return
         self.update_progress(0.35)
 
@@ -629,14 +651,14 @@ class PyrasiteWindow(Gtk.Window):
         self.update_progress(0.4, "Loading object dump")
 
         try:
-            objects = loader.load('/tmp/%d.objects' % proc.pid,
+            objects = loader.load('/tmp/%d.objects' % self.proc.pid,
                                   show_prog=False)
         except NameError:
             log.debug("Meliae not available, continuing...")
             return
         except:
             log.debug("Falling back to slower meliae object dump loader")
-            objects = loader.load('/tmp/%d.objects' % proc.pid,
+            objects = loader.load('/tmp/%d.objects' % self.proc.pid,
                                   show_prog=False, using_json=False)
         objects.compute_referrers()
         self.update_progress(0.45)
@@ -659,14 +681,14 @@ class PyrasiteWindow(Gtk.Window):
                 self.obj_store.append([str(obj.max_address)] +
                                        map(intify, line.split()[1:]))
 
-        os.unlink('/tmp/%d.objects' % proc.pid)
+        os.unlink('/tmp/%d.objects' % self.proc.pid)
 
-    def dump_stacks(self, proc):
+    def dump_stacks(self):
         self.update_progress(0.55, "Dumping stacks")
         payloads = os.path.join(os.path.abspath(os.path.dirname(
             pyrasite.__file__)), 'payloads')
         dump_stacks = os.path.join(payloads, 'dump_stacks.py')
-        code = proc.cmd(open(dump_stacks).read())
+        code = self.proc.cmd(open(dump_stacks).read())
         self.update_progress(0.6)
 
         self.source_buffer.set_text('')
@@ -674,14 +696,22 @@ class PyrasiteWindow(Gtk.Window):
         end = start.copy()
         self.source_buffer.insert(end, code)
 
-    def generate_callgraph(self, proc):
-        self.update_progress(0.7, "Tracing call stack")
-        proc.cmd('import pycallgraph; pycallgraph.start_trace()')
-        self.update_progress(0.8)
-        time.sleep(1)  # TODO: make this configurable in the UI
-        self.update_progress(0.9, "Generating call stack graph")
-        image = '/tmp/%d-callgraph.png' % proc.pid
-        proc.cmd('import pycallgraph; pycallgraph.make_dot_graph("%s")' %
+    def generate_callgraph(self, sample_size=1, show_progress=False):
+        if show_progress:
+            self.update_progress(0.7, "Tracing call stack for %d seconds" % sample_size)
+
+        self.proc.cmd('import pycallgraph; pycallgraph.start_trace()')
+
+        if show_progress:
+            self.update_progress(0.8)
+
+        time.sleep(sample_size)
+
+        if show_progress:
+            self.update_progress(0.9, "Generating call stack graph")
+
+        image = '/tmp/%d-callgraph.png' % self.proc.pid
+        self.proc.cmd('import pycallgraph; pycallgraph.make_dot_graph("%s")' %
                  image)
         self.call_graph.set_from_file(image)
 
