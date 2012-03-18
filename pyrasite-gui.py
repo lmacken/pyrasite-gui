@@ -20,6 +20,8 @@
 # by John (J5) Palmieri, and licensed under the LGPLv2.1
 # http://git.gnome.org/browse/pygobject/tree/demos/gtk-demo/gtk-demo.py
 
+from __future__ import division
+
 import os
 import sys
 import time
@@ -29,6 +31,7 @@ import logging
 import keyword
 import tokenize
 import threading
+import subprocess
 
 from os.path import join, abspath, dirname
 from random import randrange
@@ -44,7 +47,6 @@ except ImportError:
     sys.exit(1)
 
 import pyrasite
-from pyrasite.utils import setup_logger, run, humanize_bytes
 
 log = logging.getLogger('pyrasite')
 
@@ -67,18 +69,6 @@ thread_totals = {}
 open_connections = []
 open_files = []
 
-# Prefer tango colors for our lines. Fall back to random ones.
-tango = ['c4a000', 'ce5c00', '8f5902', '4e9a06', '204a87', '5c3566',
-         'a40000', '555753']
-
-
-def get_color():
-    used = thread_colors.values()
-    for color in tango:
-        if color not in used:
-            return color
-    return "".join([hex(randrange(0, 255))[2:] for i in range(3)])
-
 
 class Process(pyrasite.PyrasiteIPC, GObject.GObject):
     """
@@ -89,8 +79,9 @@ class Process(pyrasite.PyrasiteIPC, GObject.GObject):
     @property
     def title(self):
         if not getattr(self, '_title', None):
-            self._title = run('ps --no-heading -o cmd= -p %d' % self.pid)[1] \
-                    .decode('utf-8')
+            p = subprocess.Popen('ps --no-heading -o cmd= -p %d' % self.pid,
+                                 stdout=subprocess.PIPE, shell=True)
+            self._title = p.communicate()[0].decode('utf-8')
         return self._title
 
 
@@ -859,28 +850,6 @@ class PyrasiteWindow(Gtk.Window):
                 os.unlink(callgraph)
 
 
-class InputStream(object):
-    '''
-    Simple Wrapper for File-like objects. [c]StringIO doesn't provide
-    a readline function for use with generate_tokens.
-    Using a iterator-like interface doesn't succeed, because the readline
-    function isn't used in such a context. (see <python-lib>/tokenize.py)
-    '''
-    def __init__(self, data):
-        self.__data = ['%s\n' % x for x in data.splitlines()]
-        self.__lcount = 0
-
-    def readline(self):
-        try:
-            line = self.__data[self.__lcount]
-            self.__lcount += 1
-        except IndexError:
-            line = ''
-            self.__lcount = 0
-
-        return line
-
-
 class ResourceUsagePoller(threading.Thread):
     """A thread for polling a processes CPU & memory usage"""
     process = None
@@ -979,6 +948,94 @@ class ResourceUsagePoller(threading.Thread):
                 log.warn("Lost Process")
                 self.process = None
                 process_status = '[Terminated]'
+
+
+##
+## Utilities
+##
+
+class InputStream(object):
+    '''
+    Simple Wrapper for File-like objects. [c]StringIO doesn't provide
+    a readline function for use with generate_tokens.
+    Using a iterator-like interface doesn't succeed, because the readline
+    function isn't used in such a context. (see <python-lib>/tokenize.py)
+    '''
+    def __init__(self, data):
+        self.__data = ['%s\n' % x for x in data.splitlines()]
+        self.__lcount = 0
+
+    def readline(self):
+        try:
+            line = self.__data[self.__lcount]
+            self.__lcount += 1
+        except IndexError:
+            line = ''
+            self.__lcount = 0
+
+        return line
+
+
+def get_color():
+    """Prefer tango colors for our lines. Fall back to random ones."""
+    tango = ['c4a000', 'ce5c00', '8f5902', '4e9a06', '204a87',
+             '5c3566', 'a40000', '555753']
+    used = thread_colors.values()
+    for color in tango:
+        if color not in used:
+            return color
+    return "".join([hex(randrange(0, 255))[2:] for i in range(3)])
+
+
+def humanize_bytes(bytes, precision=1):
+    """Return a humanized string representation of a number of bytes.
+    http://code.activestate.com/recipes/577081-humanized-representation-of-a-number-of-bytes/
+    """
+    abbrevs = (
+        (1 << 50, 'PB'),
+        (1 << 40, 'TB'),
+        (1 << 30, 'GB'),
+        (1 << 20, 'MB'),
+        (1 << 10, 'kB'),
+        (1, 'bytes')
+    )
+    if bytes == 1:
+        return '1 byte'
+    for factor, suffix in abbrevs:
+        if bytes >= factor:
+            break
+    return '%.*f %s' % (precision, bytes / factor, suffix)
+
+
+def setup_logger(verbose=False):
+    """Based on code from Will Maier's 'ideal Python script'.
+    https://github.com/wcmaier/python-script
+    """
+    # NullHandler was added in Python 3.1.
+    try:
+        NullHandler = logging.NullHandler
+    except AttributeError:
+        class NullHandler(logging.Handler):
+            def emit(self, record):
+                pass
+
+    # Add a do-nothing NullHandler to the module logger to prevent "No handlers
+    # could be found" errors. The calling code can still add other, more useful
+    # handlers, or otherwise configure logging.
+    log = logging.getLogger('pyrasite')
+    log.addHandler(NullHandler())
+
+    level = logging.INFO
+    if verbose:
+        level = logging.DEBUG
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    handler.setLevel(level)
+    log.addHandler(handler)
+    log.setLevel(level)
+
+    return log
 
 
 def main():
