@@ -692,7 +692,9 @@ class PyrasiteWindow(Gtk.Window):
             self.update_progress(0.7, "Tracing call stack for %d seconds" %
                                  sample_size)
 
-        self.proc.cmd('import pycallgraph; pycallgraph.start_trace()')
+        out = self.proc.cmd('import pycallgraph; pycallgraph.start_trace()')
+        if out:
+            log.warn(out)
 
         if show_progress:
             self.update_progress(0.8)
