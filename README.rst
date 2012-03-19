@@ -7,6 +7,7 @@ A graphical interface that lets you easily analyze and introspect unaltered
 running Python processes.
 
 :documentation: http://pyrasite.com
+:requirements: http://readthedocs.org/docs/pyrasite/en/latest/Installing.html#gui
 
 .. image:: http://lewk.org/img/pyrasite/pyrasite-info.png
 
