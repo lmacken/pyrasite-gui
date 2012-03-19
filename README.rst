@@ -6,6 +6,8 @@ pyrasite-gui
 A graphical interface that lets you easily analyze and introspect unaltered
 running Python processes.
 
+:documentation: http://pyrasite.com
+
 .. image:: http://lewk.org/img/pyrasite/pyrasite-info.png
 
 .. image:: http://lewk.org/img/pyrasite/pyrasite-stacks.png
@@ -17,31 +19,38 @@ running Python processes.
 Requirements
 ~~~~~~~~~~~~
 
-  - `Pyrasite <https://github.com/lmacken/pyrasite>`_
-  - PyGObject3 Introspection bindings
+ - `Pyrasite <https://github.com/lmacken/pyrasite>`_
+ - python-debuginfo (needed for live object inspection)
+ - PyGObject3 Introspection bindings
 
-    - Fedora: pygobject3
-    - Ubuntu: python-gobject-dev
-    - Arch: python2-gobject
+   - Fedora: pygobject3
+   - Ubuntu: python-gobject-dev
+   - Arch: python2-gobject
 
-  - WebKitGTK3
+ - WebKitGTK3
 
-    - Fedora: webkitgtk3
-    - Ubuntu: gir1.2-webkit-3.0
-    - Arch: libwebkit3
+   - Fedora: webkitgtk3
+   - Ubuntu: gir1.2-webkit-3.0
+   - Arch: libwebkit3
 
-  - `meliae <https://launchpad.net/meliae>`_
-    - easy_install/pip may not work for this install. If not, use the tarball from the distribution website. You may need to install `Cython <http://cython.org>`_ in order to get meliae to build.
+ - `meliae <https://launchpad.net/meliae>`_
+   - easy_install/pip may not work for this install. If not, use the tarball from the distribution website. You may need to install `Cython <http://cython.org>`_ in order to get meliae to build.
 
-Mailing List
-~~~~~~~~~~~~
+   - Fedora: python-meliae
+   - Ubuntu: python-meliae
+   - Arch: python2-meliae
 
-https://fedorahosted.org/mailman/listinfo/pyrasite
+ - `pycallgraph <http://pycallgraph.slowchop.com>`_
 
-IRC
-~~~
+   - Fedora: python-pycallgraph
+   - Ubuntu: python-pycallgraph
+   - Arch: python2-pycallgraph
 
-#pyrasite on Freenode.
+ - `psutil <http://code.google.com/p/psutil>`_
+
+   - Fedora: python-psutil
+   - Ubuntu: python-psutil
+   - Arch: python2-psutil
 
 Authors
 ~~~~~~~
