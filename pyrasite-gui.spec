@@ -23,9 +23,9 @@ Requires:         python-pycallgraph
 Requires:         jquery-sparkline
 
 %description
-Pyrasite uses gdb to inject code into a running Python process.  This package
-contains a graphical interface for Pyrasite, which allows you to easily analyze
-and introspect a running Python process.
+Pyrasite uses gdb to inject code into a running Python process. This package
+contains a graphical interface for Pyrasite, which allows you to easily monitor,
+analyze, introspect, and alter running Python programs.
 
 %prep
 %setup -q -n %{name}-%{version}%{betaver}

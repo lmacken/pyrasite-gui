@@ -1,8 +1,8 @@
 pyrasite-gui
 ============
 
-A graphical interface that lets you easily analyze and introspect unaltered
-running Python processes.
+A graphical interface for Pyrasite that lets you easily monitor, analyze,
+introspect, and alter running Python programs.
 
 .. split here
 
