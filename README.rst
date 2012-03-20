@@ -1,10 +1,10 @@
 pyrasite-gui
 ============
 
-.. split here
-
 A graphical interface that lets you easily analyze and introspect unaltered
 running Python processes.
+
+.. split here
 
 :documentation: http://pyrasite.com
 :requirements: http://readthedocs.org/docs/pyrasite/en/latest/Installing.html#gui
@@ -20,7 +20,7 @@ running Python processes.
 Authors
 ~~~~~~~
 
-Luke Macken <lmacken@redhat.com>
+Luke Macken (`@lmacken <http://twitter.com/lmacken>`_)
 
 .. image:: http://api.coderwall.com/lmacken/endorsecount.png
    :target: http://coderwall.com/lmacken

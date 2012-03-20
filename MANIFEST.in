@@ -1,4 +1,6 @@
 include LICENSE
 include README.rst
-include pyrasite-gui.py
-graft js
+
+graft pyrasite_gui
+
+global-exclude *.pyc *.pyo *.swp *.swo
