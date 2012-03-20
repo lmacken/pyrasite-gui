@@ -31,15 +31,17 @@ and introspect a running Python process.
 %setup -q -n %{name}-%{version}%{betaver}
 
 %build
+%{__python} setup.py build
 
 %install
-%{__install} -D -m 655 pyrasite-gui.py %{buildroot}%{_bindir}/pyrasite-gui
+%{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
 %doc LICENSE
 %{_bindir}/pyrasite-gui
+%{python_sitelib}/pyrasite_gui*
 
 %changelog
-* Mon Mar 12 2012 Luke Macken <lmacken@redhat.com> 2.0-0.1.beta6
+* Mon Mar 12 2012 Luke Macken <lmacken@redhat.com> 2.0-0.1.beta7
 - Initial package for Fedora
