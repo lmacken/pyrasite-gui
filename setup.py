@@ -19,6 +19,7 @@ setup(name='pyrasite-gui',
       include_package_data=True,
       zip_safe=False,
       install_requires=[
+        "pyrasite",
         "meliae",
         "pycallgraph",
         "psutil",
