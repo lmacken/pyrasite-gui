@@ -333,9 +333,8 @@ class PyrasiteWindow(Gtk.Window):
     def obj_selection_cb(self, selection, model):
         sel = selection.get_selected()
         treeiter = sel[1]
-        addy = model.get_value(treeiter, 0)
-        inspector = pyrasite.ObjectInspector(self.pid)
-        value = inspector.inspect(addy)
+        address = model.get_value(treeiter, 0)
+        value = pyrasite.inspect(self.pid, address)
         if value:
             self.obj_buffer.set_text(value)
         else:
