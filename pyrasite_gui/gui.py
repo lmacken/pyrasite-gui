@@ -76,14 +76,6 @@ class Process(pyrasite.PyrasiteIPC, GObject.GObject):
     the :class:`ProcessTreeStore`
     """
 
-    @property
-    def title(self):
-        if not getattr(self, '_title', None):
-            p = subprocess.Popen('ps --no-heading -o cmd= -p %d' % self.pid,
-                                 stdout=subprocess.PIPE, shell=True)
-            self._title = p.communicate()[0].decode('utf-8')
-        return self._title
-
 
 class ProcessListStore(Gtk.ListStore):
     """This TreeStore finds all running python processes."""
