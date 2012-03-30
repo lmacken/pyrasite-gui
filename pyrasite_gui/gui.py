@@ -915,8 +915,8 @@ class ResourceUsagePoller(threading.Thread):
                     mem_details = '%0.2f%% (%s RSS, %s VMS)' % (
                             self.process.get_memory_percent(),
                             humanize_bytes(meminfo.rss),
-                            humanize_bytes(cputimes.system))
-
+                            humanize_bytes(meminfo.vms))
+                            
                     io = self.process.get_io_counters()
                     read_since_last = io.read_bytes - read_bytes
                     read_intervals.append(read_since_last)
