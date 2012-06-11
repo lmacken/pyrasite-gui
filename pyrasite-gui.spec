@@ -2,7 +2,7 @@
 
 Name:             pyrasite-gui
 Version:          2.0
-Release:          0.1.%{betaver}%{?dist}
+Release:          0.2.%{betaver}%{?dist}
 Summary:          A graphical interface for monitoring and introspecting Python
 
 Group:            Development/Tools
@@ -21,6 +21,7 @@ Requires:         webkitgtk3
 Requires:         python-meliae
 Requires:         python-pycallgraph
 Requires:         jquery-sparkline
+Requires:         python-psutil
 
 %description
 Pyrasite uses gdb to inject code into a running Python process. This package
@@ -43,5 +44,8 @@ analyze, introspect, and alter running Python programs.
 %{python_sitelib}/pyrasite_gui*
 
 %changelog
+* Sun Jun 10 2012 Luke Macken <lmacken@redhat.com> - 2.0-0.2.beta7
+- Require python-psutil
+
 * Mon Mar 12 2012 Luke Macken <lmacken@redhat.com> 2.0-0.1.beta7
 - Initial package for Fedora
