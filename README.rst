@@ -1,6 +1,11 @@
 pyrasite-gui
 ============
 
+.. image:: https://pypip.in/v/pyrasite-gui/badge.png
+   :target: https://crate.io/packages/pyrasite-gui
+.. image:: https://pypip.in/d/pyrasite-gui/badge.png
+   :target: https://crate.io/packages/pyrasite-gui
+
 A graphical interface for Pyrasite that lets you easily monitor, analyze,
 introspect, and alter running Python programs.
 
