@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2013 Ralph Bean <rbean@redhat.com> -->
+<application>
+ <id type="desktop">pyrasite-gui.desktop</id>
+ <licence>CC0</licence>
+ <name>Pyrasite GUI</name>
+ <summary>A tool for interacting with running Python processes</summary>
+ <description>
+  <p> A graphical interface for Pyrasite that lets you easily monitor, analyze,
+      introspect, and alter running Python programs.  </p>
+  <p> On startup Pyrasite GUI will present you with all the running Python
+      processes it can find on your system.  This is anything with a Python
+      interpreter embedded in it; even Vim.  </p>
+  <p> Pyrasite GUI can produce graphs of process activity, display stack
+      traces, show dumps of objets in memory, and even produce callgraphs of
+      execution... all without the bother of code instrumentation. </p>
+ </description>
+ <screenshots>
+    <screenshot type="default" width="865" height="643">http://lewk.org/img/pyrasite/pyrasite-info.png</screenshot>
+    <screenshot width="912" height="498">http://lewk.org/img/pyrasite/pyrasite-stacks.png</screenshot>
+    <screenshot width="912" height="498">http://lewk.org/img/pyrasite/pyrasite-objects.png</screenshot>
+    <screenshot width="912" height="498">http://lewk.org/img/pyrasite/pyrasite-callgraph.png</screenshot>
+ </screenshots>
+ <url type="homepage">http://pyrasite.com</url>
+ <updatecontact>lmacken@redhat.com</updatecontact>
+</application>
