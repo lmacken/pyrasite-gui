@@ -43,7 +43,7 @@ try:
     from gi.repository import GLib, GObject, Pango, Gtk, WebKit
 except ImportError:
     print("Unable to find pygobject3. Please install the 'pygobject3' ")
-    print("package on Fedora, or 'python-gobject-dev on Ubuntu.")
+    print("package on Fedora, or 'python-gobject-dev' on Ubuntu.")
     sys.exit(1)
 
 import pyrasite
