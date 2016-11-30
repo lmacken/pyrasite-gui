@@ -29,6 +29,8 @@ import socket
 import psutil
 import logging
 import keyword
+import platform
+import tempfile
 import tokenize
 import threading
 import subprocess
@@ -82,19 +84,34 @@ class ProcessListStore(Gtk.ListStore):
 
     def __init__(self, *args):
         Gtk.ListStore.__init__(self, str, Process, Pango.Style)
-        for pid in os.listdir('/proc'):
-            try:
-                pid = int(pid)
-                proc = Process(pid)
+        for process in psutil.process_iter():
+            pid = process.pid
+            if pid != os.getpid():  # ignore self
                 try:
-                    maps = open('/proc/%d/maps' % pid).read().strip()
-                    if 'python' in maps:
-                        self.append((proc.title.strip(), proc,
-                                     Pango.Style.NORMAL))
-                except IOError:
+                    if 'python' in process.name().lower() or self._check_for_python_lib(process, pid):
+                        proc = Process(pid)
+                        self.append(("%s: %s" % (pid, proc.title.strip()), proc, Pango.Style.NORMAL))
+
+                except psutil.AccessDenied:
                     pass
-            except ValueError:
+
+    def _check_for_python_lib(self, process, pid):
+        if platform.system() == 'Windows':
+            # psutils.open_files often doesn't show loaded system libraries on windows
+            try:
+                import win32api, win32con, win32process
+                handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, pid)
+                for fhandle in win32process.EnumProcessModules(handle):
+                    if 'python' in win32process.GetModuleFileNameEx(handle, fhandle).lower():
+                        return True
+            except:  # Can't inspect process, ignore
                 pass
+        else:
+            open_files = process.open_files()
+            if any(('python' in lib.path.lower() for lib in open_files)):
+                return True
+
+        return False
 
 
 class PyrasiteWindow(Gtk.Window):
@@ -107,7 +124,7 @@ class PyrasiteWindow(Gtk.Window):
         self.resource_thread = None
 
         self.set_title('Pyrasite v%s' % pyrasite.__version__)
-        self.set_default_size(600, 400)
+        self.set_default_size(1024, 600)
 
         hbox = Gtk.HBox(homogeneous=False, spacing=0)
         self.add(hbox)
@@ -442,6 +459,13 @@ class PyrasiteWindow(Gtk.Window):
         self.info_view.load_string(self.info_html, "text/html", "utf-8", '#')
 
         # The Details tab
+        try:
+            uid = p.uids().real
+            gid = p.gids().real
+        except AttributeError:
+            uid = "n/a"
+            gid = "n/a"
+
         self.details_html = """
         <style>
         body {font: normal 12px/150%% Arial, Helvetica, sans-serif;}
@@ -458,9 +482,9 @@ class PyrasiteWindow(Gtk.Window):
             <li><b>gid:</b> %s</li>
             <li><b>nice:</b> %s</li>
         </ul>
-        """ % (self.proc.title, p.status, p.getcwd(), ' '.join(p.cmdline),
-               getattr(p, 'terminal', 'unknown'), time.ctime(p.create_time),
-               p.username, p.uids.real, p.gids.real, p.nice)
+        """ % (self.proc.title, p.status, p.cwd(), ' '.join(p.cmdline()),
+               getattr(p, 'terminal', 'unknown'), time.ctime(p.create_time()),
+               p.username(), uid, gid, p.nice())
 
         self.details_view.load_string(self.details_html, "text/html",
                                       "utf-8", '#')
@@ -564,7 +588,7 @@ class PyrasiteWindow(Gtk.Window):
 
         treeiter = sel[1]
         title = model.get_value(treeiter, 0)
-        proc = model.get_value(treeiter, 1)
+        proc = model.get_value(treeiter, 1)  # type: Process
         self.proc = proc
 
         if self.pid and proc.pid != self.pid:
@@ -617,8 +641,9 @@ class PyrasiteWindow(Gtk.Window):
         self.update_progress(0.0)
 
     def dump_objects(self):
-        cmd = ';'.join(["import os, shutil", "from meliae import scanner",
-                        "tmp = '/tmp/%d' % os.getpid()",
+
+        cmd = ';'.join(["import os, shutil, tempfile", "from meliae import scanner",
+                        "tmp = os.path.join(tempfile.gettempdir(), str(os.getpid()))",
                         "scanner.dump_all_objects(tmp + '.json')",
                         "shutil.move(tmp + '.json', tmp + '.objects')"])
         output = self.proc.cmd(cmd)
@@ -632,38 +657,40 @@ class PyrasiteWindow(Gtk.Window):
         self.obj_store.clear()
         self.update_progress(0.4, "Loading object dump")
 
-        try:
-            objects = loader.load('/tmp/%d.objects' % self.proc.pid,
-                                  show_prog=False)
-        except NameError:
-            log.debug("Meliae not available, continuing...")
-            return
-        except:
-            log.debug("Falling back to slower meliae object dump loader")
-            objects = loader.load('/tmp/%d.objects' % self.proc.pid,
-                                  show_prog=False, using_json=False)
-        objects.compute_referrers()
-        self.update_progress(0.45)
-        summary = objects.summarize()
-        self.update_progress(0.47)
-
-        def intify(x):
+        tmp = os.path.join(tempfile.gettempdir(), str(self.proc.pid))
+        objects_file = tmp + '.objects'
+        if os.path.exists(objects_file):
             try:
-                return int(x)
+                objects = loader.load(objects_file, show_prog=False)
+            except NameError:
+                log.debug("Meliae not available, continuing...")
+                return
             except:
-                return x
+                log.debug("Falling back to slower meliae object dump loader")
+                objects = loader.load(objects_file, show_prog=False, using_json=False)
 
-        for i, line in enumerate(str(summary).split('\n')):
-            if i == 0:
-                self.obj_totals.set_text(line)
-            elif i == 1:
-                continue  # column headers
-            else:
-                obj = summary.summaries[i - 2]
-                self.obj_store.append([str(obj.max_address)] +
-                                       map(intify, line.split()[1:]))
+            objects.compute_referrers()
+            self.update_progress(0.45)
+            summary = objects.summarize()
+            self.update_progress(0.47)
 
-        os.unlink('/tmp/%d.objects' % self.proc.pid)
+            def intify(x):
+                try:
+                    return int(x)
+                except:
+                    return x
+
+            for i, line in enumerate(str(summary).split('\n')):
+                if i == 0:
+                    self.obj_totals.set_text(line)
+                elif i == 1:
+                    continue  # column headers
+                else:
+                    obj = summary.summaries[i - 2]
+                    self.obj_store.append([str(obj.max_address)] +
+                                           map(intify, line.split()[1:]))
+
+            os.unlink(objects_file)
 
     def dump_stacks(self):
         self.update_progress(0.55, "Dumping stacks")
@@ -682,8 +709,17 @@ class PyrasiteWindow(Gtk.Window):
         if show_progress:
             self.update_progress(0.7, "Tracing call stack for %d seconds" %
                                  sample_size)
+        graphviz_path = which('dot')
 
-        out = self.proc.cmd('import pycallgraph; pycallgraph.start_trace()')
+        image = os.path.join(tempfile.gettempdir(), "%d-callgraph.png" % self.proc.pid)
+
+        out = self.proc.cmd(';'.join(('import pycallgraph',
+                                      'from pycallgraph.output import GraphvizOutput',
+                                      '_output = GraphvizOutput()',
+                                      '_output.tool=r"%s"' % graphviz_path,
+                                      '_output.output_file=r"%s"' % image,
+                                      'pycallgraph._pycallgraph = pycallgraph.PyCallGraph(output=_output)',
+                                      'pycallgraph._pycallgraph.start()')))
         if out:
             log.warn(out)
 
@@ -695,9 +731,7 @@ class PyrasiteWindow(Gtk.Window):
         if show_progress:
             self.update_progress(0.9, "Generating call stack graph")
 
-        image = '/tmp/%d-callgraph.png' % self.proc.pid
-        self.proc.cmd('import pycallgraph; pycallgraph.make_dot_graph("%s")' %
-                 image)
+        self.proc.cmd('import pycallgraph; pycallgraph._pycallgraph.done()')
         self.call_graph.set_from_file(image)
 
     def row_activated_cb(self, view, path, col, store):
@@ -908,9 +942,9 @@ class ResourceUsagePoller(threading.Thread):
         global cpu_intervals, cpu_details
         if len(cpu_intervals) >= INTERVALS:
             cpu_intervals = cpu_intervals[1:]
-        cpu_intervals.append(
-            self.process.get_cpu_percent(interval=POLL_INTERVAL))
-        cputimes = self.process.get_cpu_times()
+        cpu_intervals.append(float(
+            self.process.cpu_percent(interval=POLL_INTERVAL)))
+        cputimes = self.process.cpu_times()
         cpu_details = '%0.2f%% (%s user, %s system)' % (
                 cpu_intervals[-1], cputimes.user, cputimes.system)
 
@@ -918,10 +952,10 @@ class ResourceUsagePoller(threading.Thread):
         global mem_intervals, mem_details
         if len(mem_intervals) >= INTERVALS:
             mem_intervals = mem_intervals[1:]
-        mem_intervals.append(self.process.get_memory_info().rss)
-        meminfo = self.process.get_memory_info()
+        mem_intervals.append(float(self.process.memory_info().rss))
+        meminfo = self.process.memory_info()
         mem_details = '%0.2f%% (%s RSS, %s VMS)' % (
-                self.process.get_memory_percent(),
+                self.process.memory_percent(),
                 humanize_bytes(meminfo.rss),
                 humanize_bytes(meminfo.vms))
 
@@ -931,19 +965,19 @@ class ResourceUsagePoller(threading.Thread):
         if len(read_intervals) >= INTERVALS:
             read_intervals = read_intervals[1:]
             write_intervals = write_intervals[1:]
-        io = self.process.get_io_counters()
+        io = self.process.io_counters()
         read_since_last = io.read_bytes - read_bytes
-        read_intervals.append(read_since_last)
+        read_intervals.append(float(read_since_last))
         read_count = io.read_count
         read_bytes = io.read_bytes
         write_since_last = io.write_bytes - write_bytes
-        write_intervals.append(write_since_last)
+        write_intervals.append(float(write_since_last))
         write_count = io.write_count
         write_bytes = io.write_bytes
 
     def poll_threads(self):
         global thread_intervals
-        for thread in self.process.get_threads():
+        for thread in self.process.threads():
             if thread.id not in thread_intervals:
                 thread_intervals[thread.id] = []
                 thread_colors[thread.id] = get_color()
@@ -964,18 +998,18 @@ class ResourceUsagePoller(threading.Thread):
     def poll_connections(self):
         global open_connections
         connections = []
-        for i, conn in enumerate(self.process.get_connections()):
+        for i, conn in enumerate(self.process.connections()):
             if conn.type == socket.SOCK_STREAM:
                 type = 'TCP'
             elif conn.type == socket.SOCK_DGRAM:
                 type = 'UDP'
             else:
                 type = 'UNIX'
-            lip, lport = conn.local_address
-            if not conn.remote_address:
+            lip, lport = conn.laddr
+            if not conn.raddr:
                 rip = rport = '*'
             else:
-                rip, rport = conn.remote_address
+                rip, rport = conn.raddr
             connections.append({
                 'type': type,
                 'status': conn.status,
@@ -987,8 +1021,8 @@ class ResourceUsagePoller(threading.Thread):
     def poll_files(self):
         global open_files
         files = []
-        for open_file in self.process.get_open_files():
-            files.append(open_file.path)
+        for open_file in self.process.open_files():
+            files.append(open_file.path.replace('\\', '\\\\'))
         open_files = files
 
 
@@ -1084,10 +1118,74 @@ def check_depends():
     try:
         # call dot command with null input file.
         # throws exception if command "dot" not found
-        subprocess.call(['dot', '/dev/null'], shell=False)
+        subprocess.call(['dot', '-V'], shell=False)
+        assert which('dot')
     except OSError:
         print('WARNING: graphviz dot command not found. ' +
               'Call graph will not be available')
+
+
+def which(cmd, mode=os.F_OK | os.X_OK, path=None):
+    """Given a command, mode, and a PATH string, return the path which
+    conforms to the given mode on the PATH, or None if there is no such
+    file.
+
+    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result
+    of os.environ.get("PATH"), or can be overridden with a custom search
+    path.
+
+    """
+    # Check that a given file can be accessed with the correct mode.
+    # Additionally check that `file` is not a directory, as on Windows
+    # directories pass the os.access check.
+    def _access_check(fn, mode):
+        return (os.path.exists(fn) and os.access(fn, mode)
+                and not os.path.isdir(fn))
+
+    # If we're given a path with a directory part, look it up directly rather
+    # than referring to PATH directories. This includes checking relative to the
+    # current directory, e.g. ./script
+    if os.path.dirname(cmd):
+        if _access_check(cmd, mode):
+            return cmd
+        return None
+
+    if path is None:
+        path = os.environ.get("PATH", os.defpath)
+    if not path:
+        return None
+    path = path.split(os.pathsep)
+
+    if sys.platform == "win32":
+        # The current directory takes precedence on Windows.
+        if not os.curdir in path:
+            path.insert(0, os.curdir)
+
+        # PATHEXT is necessary to check on Windows.
+        pathext = os.environ.get("PATHEXT", "").split(os.pathsep)
+        # See if the given file matches any of the expected path extensions.
+        # This will allow us to short circuit when given "python.exe".
+        # If it does match, only test that one, otherwise we have to try
+        # others.
+        if any(cmd.lower().endswith(ext.lower()) for ext in pathext):
+            files = [cmd]
+        else:
+            files = [cmd + ext for ext in pathext]
+    else:
+        # On other platforms you don't have things like PATHEXT to tell you
+        # what file suffixes are executable, so just pass on cmd as-is.
+        files = [cmd]
+
+    seen = set()
+    for dir in path:
+        normdir = os.path.normcase(dir)
+        if not normdir in seen:
+            seen.add(normdir)
+            for thefile in files:
+                name = os.path.join(dir, thefile)
+                if _access_check(name, mode):
+                    return name
+    return None
 
 
 def main():
