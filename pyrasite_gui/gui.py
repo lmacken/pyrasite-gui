@@ -43,7 +43,7 @@ try:
     from gi.repository import GLib, GObject, Pango, Gtk, WebKit
 except ImportError:
     print("Unable to find pygobject3. Please install the 'pygobject3' ")
-    print("package on Fedora, or 'python-gobject-dev' on Ubuntu.")
+    print("package on Fedora, or 'python-gobject-dev on Ubuntu.")
     sys.exit(1)
 
 import pyrasite
@@ -75,6 +75,14 @@ class Process(pyrasite.PyrasiteIPC, GObject.GObject):
     A :class:`GObject.GObject` subclass that represents a Process, for use in
     the :class:`ProcessTreeStore`
     """
+
+    @property
+    def title(self):
+        if not getattr(self, '_title', None):
+            p = subprocess.Popen('ps --no-heading -o cmd= -p %d' % self.pid,
+                                 stdout=subprocess.PIPE, shell=True)
+            self._title = p.communicate()[0].decode('utf-8')
+        return self._title
 
 
 class ProcessListStore(Gtk.ListStore):
@@ -440,7 +448,7 @@ class PyrasiteWindow(Gtk.Window):
         """
 
         self.info_view.load_string(self.info_html, "text/html", "utf-8", '#')
-
+        #print(dir(p)) actual attribute/methods
         # The Details tab
         self.details_html = """
         <style>
@@ -458,9 +466,9 @@ class PyrasiteWindow(Gtk.Window):
             <li><b>gid:</b> %s</li>
             <li><b>nice:</b> %s</li>
         </ul>
-        """ % (self.proc.title, p.status, p.getcwd(), ' '.join(p.cmdline),
-               getattr(p, 'terminal', 'unknown'), time.ctime(p.create_time),
-               p.username, p.uids.real, p.gids.real, p.nice)
+        """ % (self.proc.title, p.status, p.cwd, (p.cmdline),
+               getattr(p, 'terminal', 'unknown'), time.ctime(p.create_time()),
+               p.username, p.uids().real, p.gids().real, p.nice)
 
         self.details_view.load_string(self.details_html, "text/html",
                                       "utf-8", '#')
@@ -874,10 +882,6 @@ class PyrasiteWindow(Gtk.Window):
                 os.unlink(callgraph)
 
 
-##
-## Background Threads
-##
-
 class ResourceUsagePoller(threading.Thread):
     """A thread for polling a processes CPU & memory usage"""
     process = None
@@ -887,109 +891,95 @@ class ResourceUsagePoller(threading.Thread):
         self.process = psutil.Process(pid)
 
     def run(self):
+        global cpu_intervals, mem_intervals, cpu_details, mem_details
+        global read_count, read_bytes, write_count, write_bytes
+        global read_intervals, write_intervals, thread_intervals
+        global open_files, open_connections
+        global process_status
         while True:
             try:
                 if self.process:
-                    self.poll_cpu()
-                    self.poll_mem()
-                    self.poll_io()
-                    self.poll_threads()
-                    self.poll_connections()
-                    self.poll_files()
+                    if len(cpu_intervals) >= INTERVALS:
+                        cpu_intervals = cpu_intervals[1:INTERVALS]
+                        mem_intervals = mem_intervals[1:INTERVALS]
+                        read_intervals = read_intervals[1:INTERVALS]
+                        write_intervals = write_intervals[1:INTERVALS]
+
+                    cpu_intervals.append(
+                        self.process.cpu_percent(interval=POLL_INTERVAL))
+                    mem_intervals.append(self.process.memory_info().rss)
+                    cputimes = self.process.cpu_times()
+                    cpu_details = '%0.2f%% (%s user, %s system)' % (
+                            cpu_intervals[-1], cputimes.user, cputimes.system)
+                    meminfo = self.process.memory_info()
+                    mem_details = '%0.2f%% (%s RSS, %s VMS)' % (
+                            self.process.memory_percent(),
+                            humanize_bytes(meminfo.rss),
+                            humanize_bytes(cputimes.system))
+
+                    io = self.process.io_counters()
+                    read_since_last = io.read_bytes - read_bytes
+                    read_intervals.append(read_since_last)
+                    read_count = io.read_count
+                    read_bytes = io.read_bytes
+                    write_since_last = io.write_bytes - write_bytes
+                    write_intervals.append(write_since_last)
+                    write_count = io.write_count
+                    write_bytes = io.write_bytes
+
+                    for thread in self.process.threads():
+                        if thread.id not in thread_intervals:
+                            thread_intervals[thread.id] = []
+                            thread_colors[thread.id] = get_color()
+                            thread_totals[thread.id] = 0.0
+
+                        if len(thread_intervals[thread.id]) >= INTERVALS:
+                            thread_intervals[thread.id] = \
+                                    thread_intervals[thread.id][1:INTERVALS]
+
+                        # FIXME: we should figure out some way to visually
+                        # distinguish between user and system time.
+                        total = thread.system_time + thread.user_time
+                        amount_since = total - thread_totals[thread.id]
+                        thread_intervals[thread.id].append(
+                                float('%.2f' % amount_since))
+                        thread_totals[thread.id] = total
+
+                    # Open connections
+                    connections = []
+                    for i, conn in enumerate(self.process.connections()):
+                        if conn.type == socket.SOCK_STREAM:
+                            type = 'TCP'
+                        elif conn.type == socket.SOCK_DGRAM:
+                            type = 'UDP'
+                        else:
+                            type = 'UNIX'
+                        lip, lport = conn.local_address
+                        if not conn.remote_address:
+                            rip = rport = '*'
+                        else:
+                            rip, rport = conn.remote_address
+                        connections.append({
+                            'type': type,
+                            'status': conn.status,
+                            'local': '%s:%s' % (lip, lport),
+                            'remote': '%s:%s' % (rip, rport),
+                            })
+                    open_connections = connections
+
+                    # Open files
+                    files = []
+                    for open_file in self.process.open_files():
+                        files.append(open_file.path)
+                    open_files = files
+
                 else:
                     time.sleep(1)
+
             except psutil.NoSuchProcess:
                 log.warn("Lost Process")
                 self.process = None
-                global process_status
                 process_status = '[Terminated]'
-
-    def poll_cpu(self):
-        global cpu_intervals, cpu_details
-        if len(cpu_intervals) >= INTERVALS:
-            cpu_intervals = cpu_intervals[1:]
-        cpu_intervals.append(
-            self.process.get_cpu_percent(interval=POLL_INTERVAL))
-        cputimes = self.process.get_cpu_times()
-        cpu_details = '%0.2f%% (%s user, %s system)' % (
-                cpu_intervals[-1], cputimes.user, cputimes.system)
-
-    def poll_mem(self):
-        global mem_intervals, mem_details
-        if len(mem_intervals) >= INTERVALS:
-            mem_intervals = mem_intervals[1:]
-        mem_intervals.append(self.process.get_memory_info().rss)
-        meminfo = self.process.get_memory_info()
-        mem_details = '%0.2f%% (%s RSS, %s VMS)' % (
-                self.process.get_memory_percent(),
-                humanize_bytes(meminfo.rss),
-                humanize_bytes(meminfo.vms))
-
-    def poll_io(self):
-        global read_count, read_bytes, write_count, write_bytes
-        global read_intervals, write_intervals
-        if len(read_intervals) >= INTERVALS:
-            read_intervals = read_intervals[1:]
-            write_intervals = write_intervals[1:]
-        io = self.process.get_io_counters()
-        read_since_last = io.read_bytes - read_bytes
-        read_intervals.append(read_since_last)
-        read_count = io.read_count
-        read_bytes = io.read_bytes
-        write_since_last = io.write_bytes - write_bytes
-        write_intervals.append(write_since_last)
-        write_count = io.write_count
-        write_bytes = io.write_bytes
-
-    def poll_threads(self):
-        global thread_intervals
-        for thread in self.process.get_threads():
-            if thread.id not in thread_intervals:
-                thread_intervals[thread.id] = []
-                thread_colors[thread.id] = get_color()
-                thread_totals[thread.id] = 0.0
-
-            if len(thread_intervals[thread.id]) >= INTERVALS:
-                thread_intervals[thread.id] = \
-                        thread_intervals[thread.id][1:INTERVALS]
-
-            # FIXME: we should figure out some way to visually
-            # distinguish between user and system time.
-            total = thread.system_time + thread.user_time
-            amount_since = total - thread_totals[thread.id]
-            thread_intervals[thread.id].append(
-                    float('%.2f' % amount_since))
-            thread_totals[thread.id] = total
-
-    def poll_connections(self):
-        global open_connections
-        connections = []
-        for i, conn in enumerate(self.process.get_connections()):
-            if conn.type == socket.SOCK_STREAM:
-                type = 'TCP'
-            elif conn.type == socket.SOCK_DGRAM:
-                type = 'UDP'
-            else:
-                type = 'UNIX'
-            lip, lport = conn.local_address
-            if not conn.remote_address:
-                rip = rport = '*'
-            else:
-                rip, rport = conn.remote_address
-            connections.append({
-                'type': type,
-                'status': conn.status,
-                'local': '%s:%s' % (lip, lport),
-                'remote': '%s:%s' % (rip, rport),
-                })
-        open_connections = connections
-
-    def poll_files(self):
-        global open_files
-        files = []
-        for open_file in self.process.get_open_files():
-            files.append(open_file.path)
-        open_files = files
 
 
 ##
@@ -1084,7 +1074,7 @@ def check_depends():
     try:
         # call dot command with null input file.
         # throws exception if command "dot" not found
-        subprocess.call(['dot', '/dev/null'], shell=False)
+        ret = subprocess.call(['dot', '/dev/null'], shell=False)
     except OSError:
         print('WARNING: graphviz dot command not found. ' +
               'Call graph will not be available')
