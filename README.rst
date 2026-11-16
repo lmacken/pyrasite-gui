@@ -27,8 +27,9 @@ The ``dot`` binary from Graphviz is required for the call graph tab::
 
 Optional features:
 
-* Object memory analysis needs ``meliae``, which only supports older CPython
-  versions. Without it the Objects tab reports that analysis is disabled.
+* The Objects tab uses a built-in ``gc.get_objects()`` summary. ``meliae`` adds
+  per-type memory accounting, but it does not build on current CPython
+  versions, so the built-in summary is used by default.
 * Call graphs need ``pycallgraph2`` in the target interpreter and Graphviz.
 
 Installation
@@ -71,7 +72,8 @@ Troubleshooting
   packages listed above and make sure the GUI runs with the same interpreter
   that can import ``gi``.
 * **Injection fails with a ptrace error** — see the ptrace notes above.
-* **Objects tab is disabled** — ``meliae`` does not build on current CPython
-  versions; this is expected.
+* **Objects tab mentions meliae** — ``meliae`` does not build on current
+  CPython versions. The tab falls back to the built-in ``gc.get_objects()``
+  summary, which is expected.
 * **Call Graph is unavailable** — install Graphviz and make sure ``dot`` is on
   ``PATH``.
